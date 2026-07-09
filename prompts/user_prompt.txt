@@ -1,0 +1,8 @@
+Your Current Hand:
+{ai_hand}
+
+The player to your right has exactly {target_card_count} cards in their hand.
+
+You must pick a card index from 0 to {max_index} to draw from them.
+
+Make your choice strategically or randomly, and generate a fun comment based on the house rules.
