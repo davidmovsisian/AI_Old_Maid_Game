@@ -5,8 +5,17 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 from engine import GameEngine
 from ai_service import AIService
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Old Maid AI Server")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 ai_service = AIService()
 
 # Global in-memory storage for active games (use Redis/Database for production scale)
@@ -95,7 +104,7 @@ async def human_move(game_id: str, player_name: str, move: HumanMoveRequest):
     current_turn_player = list(engine.players.keys())[engine.current_turn_index]
     
     if current_turn_player != player_name:
-        raise HTTPException(status_code=400, detail="It is not your turn.")
+        raise HTTPException(status_code=400, detail=f"It is not {player_name}'s turn.")
 
     target_player = engine.get_next_player(player_name)
     try:
@@ -115,7 +124,7 @@ async def ai_move(game_id: str, ai_player_name: str):
     current_turn_player = list(engine.players.keys())[engine.current_turn_index]
     
     if current_turn_player != ai_player_name:
-        raise HTTPException(status_code=400, detail="It is not the AI's turn.")
+        raise HTTPException(status_code=400, detail=f"It is not {ai_player_name}'s turn.")
     
     target_player = engine.get_next_player(ai_player_name)
     target_card_count = len(engine.players[target_player].hand)

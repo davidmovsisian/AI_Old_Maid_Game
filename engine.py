@@ -55,6 +55,28 @@ class GameEngine:
         self.current_turn_index = 0
         self.discarded_pairs: List[str] = []
 
+    def _remove_empty_players_after_turn(self, current_player: str, original_order: List[str]):
+        eliminated_players = [name for name, player in self.players.items() if len(player.hand) == 0]
+        for player_name in eliminated_players:
+            self.players.pop(player_name)
+
+        if not self.players:
+            self.current_turn_index = 0
+            return
+
+        current_index = original_order.index(current_player)
+        next_player = None
+        for offset in range(1, len(original_order) + 1):
+            candidate = original_order[(current_index + offset) % len(original_order)]
+            if candidate in self.players:
+                next_player = candidate
+                break
+
+        if next_player is None:
+            next_player = next(iter(self.players))
+
+        self.current_turn_index = list(self.players.keys()).index(next_player)
+
     def _initialize_game(self):
         # create deck of cards
         suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
@@ -86,8 +108,11 @@ class GameEngine:
         return list(self.players.keys())[next_idx]
     
     def execute_draw(self, current_player: str, target_player: str, card_index: int):
+        print(f"Executing draw: {current_player} draws from {target_player} at index {card_index}")
         if card_index < 0 or card_index >= len(self.players[target_player].hand):
             raise IndexError("Card index out of range.")
+
+        original_order = list(self.players.keys())
         
         drawn_card = self.players[target_player].hand.pop(card_index)
         self.players[current_player].hand.append(drawn_card)
@@ -95,13 +120,7 @@ class GameEngine:
         # Remove pairs after drawing
         removed_pairs = self.players[current_player].remove_pairs()
 
-        #check if target player has no cards left, if so, update state of the game
-        if len(self.players[target_player].hand) == 0:
-            self.players.pop(target_player)
-            # Update turn index if player removed is before current turn index
-            self.current_turn_index = list(self.players.keys()).index(current_player)
-
-        self.current_turn_index = (self.current_turn_index + 1) % len(self.players)
+        self._remove_empty_players_after_turn(current_player, original_order)
 
         return {
             "drawn_card_visible_to_drawer": drawn_card.to_dict(),
