@@ -109,10 +109,13 @@ async def human_move(game_id: str, player_name: str, move: HumanMoveRequest):
     target_player = engine.get_next_player(player_name)
     try:
         result = engine.execute_draw(player_name, target_player, move.card_index)
+        # check if player in players after the draw, if not, it means they were eliminated
         return MoveResponse(
             status="success",
-            action=f"You drew a card from {target_player}" if len(engine.players) > 1 else "Game over, you are the last player remaining.",
+            action=f"{player_name} drew a card from {target_player}",
             details=result,
+            player_valid = True if player_name in engine.players else False,
+            game_over = True if len(engine.players) == 1 else False,
             next_turn=list(engine.players.keys())[engine.current_turn_index],
         )
     except Exception as e:
@@ -144,10 +147,11 @@ async def ai_move(game_id: str, ai_player_name: str):
     
     return MoveResponse(
         status="success",
-        action=f"AI drew a card from {target_player}" if len(engine.players) > 1 else "Game over, AI is the last player remaining.",
+        action=f"{ai_player_name} drew a card from {target_player}",
         details=result,
+        player_valid = True if ai_player_name in engine.players else False,
+        game_over = True if len(engine.players) == 1 else False,
         next_turn=list(engine.players.keys())[engine.current_turn_index],
-        ai_commentary=ai_decision.roleplay_comment,
     )
 
 if __name__ == "__main__":
