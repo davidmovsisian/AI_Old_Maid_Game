@@ -22,6 +22,13 @@ class JoinGameRequest(BaseModel):
 class HumanMoveRequest(BaseModel):
     card_index: int
 
+class MoveResponse(BaseModel):
+    status: str
+    action: str
+    details: Dict[str, Any]
+    next_turn: str
+    ai_commentary: str = None  # Optional, only for AI moves
+
 @app.post("/game/create")
 async def create_game(req: CreateGameRequest):
     engine = GameEngine(house_rules=req.house_rules)
@@ -93,13 +100,12 @@ async def human_move(game_id: str, player_name: str, move: HumanMoveRequest):
     target_player = engine.get_next_player(player_name)
     try:
         result = engine.execute_draw(player_name, target_player, move.card_index)
-        return {
-            "status": "success",
-            "action": f"You drew a card from {target_player}",
-            "details": result,
-            "next_turn": list(engine.players.keys())[engine.current_turn_index],
-            "verdict": "You drew a card successfully." if len(engine.players) > 1 else "Game over, you are the last player remaining."
-        }
+        return MoveResponse(
+            status="success",
+            action=f"You drew a card from {target_player}" if len(engine.players) > 1 else "Game over, you are the last player remaining.",
+            details=result,
+            next_turn=list(engine.players.keys())[engine.current_turn_index],
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -127,15 +133,13 @@ async def ai_move(game_id: str, ai_player_name: str):
     # Execute the move the AI requested
     result = engine.execute_draw(ai_player_name, target_player, ai_decision.chosen_index)
     
-    return {
-        "status": "success",
-        "ai_player": ai_player_name,
-        "target_drawn_from": target_player,
-        "ai_commentary": ai_decision.roleplay_comment,
-        "new_pairs_discarded_by_ai": result["new_pairs_formed"],
-        "next_turn": list(engine.players.keys())[engine.current_turn_index],
-        "verdict": "AI drew a card successfully." if len(engine.players) > 1 else "Game over, AI is the last player remaining."
-    }
+    return MoveResponse(
+        status="success",
+        action=f"AI drew a card from {target_player}" if len(engine.players) > 1 else "Game over, AI is the last player remaining.",
+        details=result,
+        next_turn=list(engine.players.keys())[engine.current_turn_index],
+        ai_commentary=ai_decision.roleplay_comment,
+    )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
