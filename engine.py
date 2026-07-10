@@ -12,16 +12,48 @@ class Card:
 
     def to_dict(self):
         return {"suit": self.suit, "rank": self.rank}
+
+class Player:
+    def __init__(self, name: str, player_type: str = "human"):
+        self.name = name
+        self.player_type = player_type
+        self.hand: List[Card] = []
+
+    def add_card(self, card: Card):
+        self.hand.append(card)
+
+    def remove_pairs(self) -> List[str]:
+        from collections import defaultdict
+        rank_groups = defaultdict(list)
+        for card in self.hand:
+            rank_groups[card.rank].append(card)
+
+        new_hand = []
+        removed_pairs = []
+
+        for rank, cards in rank_groups.items():
+            count = len(cards)
+            pairs_count = count // 2
+            
+            # Track removed pairs for house rules / logs
+            for _ in range(pairs_count):
+                removed_pairs.append(f"Pair of {rank}s")
+                
+            # IF there's a remainder (1 or 3 cards originally), ONE card survives
+            if count % 2 == 1:
+                new_hand.append(cards[-1])
+
+        # Update the engine's state with the clean hand
+        self.hand = new_hand
+
+        return removed_pairs
     
 class GameEngine:
-    def __init__(self, player_names: List[str], house_rules: str):
-        self.player_names = player_names
+    def __init__(self, house_rules: str):
+        self.players: Dict[str, Player] = {}
         self.house_rules = house_rules
-        self.hands: Dict[str, List[Card]] = {name: [] for name in player_names}
-        self.turn_order = player_names.copy()
         self.current_turn_index = 0
         self.discarded_pairs: List[str] = []
-        self._initialize_game()
 
     def _initialize_game(self):
         # create deck of cards
@@ -37,65 +69,39 @@ class GameEngine:
 
         # deal cards to players
         for i, card in enumerate(deck):
-            player_name = self.player_names[i % len(self.player_names)]
-            self.hands[player_name].append(card)
+            player = list(self.players.values())[i % len(self.players)]
+            player.add_card(card)
         
         # remove pairs from hands
-        for player_name in self.player_names:
-            self.remove_pairs(player_name)
-        
-    def remove_pairs(self, player_name: str) -> List[str]:
-        hand = self.hands[player_name]
-        
-        # Group actual Card objects by their rank
-        from collections import defaultdict
-        rank_groups = defaultdict(list)
-        for card in hand:
-            rank_groups[card.rank].append(card)
+        for player in self.players.values():
+            removed_pairs = player.remove_pairs()
+            self.discarded_pairs.extend(removed_pairs)
 
-        new_hand = []
-        removed_pairs = []
+    def add_player(self, player_name: str, player_type: str = "human"):
+        self.players[player_name] = Player(player_name, player_type=player_type)
 
-        for rank, cards in rank_groups.items():
-            count = len(cards)
-            pairs_count = count // 2
-            
-            # Track removed pairs for house rules / logs
-            for _ in range(pairs_count):
-                removed_pairs.append(f"Pair of {rank}s")
-                self.discarded_pairs.append(f"Pair of {rank}s")
-                
-            # IF there's a remainder (1 or 3 cards originally), ONE card survives
-            if count % 2 == 1:
-                new_hand.append(cards[-1])
-
-        # Update the engine's state with the clean hand
-        self.hands[player_name] = new_hand
-
-        return removed_pairs
-    
     def get_next_player(self, current_player: str) -> str:
-        idx = self.turn_order.index(current_player)
-        next_idx = (idx + 1) % len(self.turn_order)
-        return self.turn_order[next_idx]
+        idx = list(self.players.keys()).index(current_player)
+        next_idx = (idx + 1) % len(self.players)
+        return list(self.players.keys())[next_idx]
     
     def execute_draw(self, current_player: str, target_player: str, card_index: int):
-        if card_index < 0 or card_index >= len(self.hands[target_player]):
+        if card_index < 0 or card_index >= len(self.players[target_player].hand):
             raise IndexError("Card index out of range.")
         
-        drawn_card = self.hands[target_player].pop(card_index)
-        self.hands[current_player].append(drawn_card)
+        drawn_card = self.players[target_player].hand.pop(card_index)
+        self.players[current_player].hand.append(drawn_card)
         
         # Remove pairs after drawing
-        removed_pairs = self.remove_pairs(current_player)
+        removed_pairs = self.players[current_player].remove_pairs()
 
         #check if target player has no cards left, if so, update state of the game
-        if len(self.hands[target_player]) == 0:
-            self.player_names.remove(target_player)
-            self.hands.pop(target_player)
-            self.turn_order = self.player_names.copy()
+        if len(self.players[target_player].hand) == 0:
+            self.players.pop(target_player)
+            # Update turn index if player removed is before current turn index
+            self.current_turn_index = list(self.players.keys()).index(current_player)
 
-        self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
+        self.current_turn_index = (self.current_turn_index + 1) % len(self.players)
 
         return {
             "drawn_card_visible_to_drawer": drawn_card.to_dict(),
